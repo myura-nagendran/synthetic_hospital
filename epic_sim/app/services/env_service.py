@@ -171,6 +171,27 @@ def filter_future_encounters(obj, allowed: set[int]):
     return obj
 
 
+def filter_ordering_encounter_imaging(obj, encounter_id: int, *, untyped_imaging: bool = False):
+    """Exclude ordering-encounter imaging; the schema has no study-level link.
+
+    `view_results(imaging)` omits section_type, so its dispatcher context supplies
+    that type. Other tools carry section_type on each section object.
+    """
+    def blocked(value):
+        return (isinstance(value, dict) and value.get("encounter_id") == encounter_id
+                and (untyped_imaging or str(value.get("section_type", "")).lower() == "imaging"))
+
+    if isinstance(obj, list):
+        return [filter_ordering_encounter_imaging(item, encounter_id, untyped_imaging=untyped_imaging)
+                for item in obj if not blocked(item)]
+    if isinstance(obj, dict):
+        if blocked(obj):
+            return {"error": "Ordering-encounter imaging is excluded from this pre-read episode."}
+        return {key: filter_ordering_encounter_imaging(value, encounter_id, untyped_imaging=untyped_imaging)
+                for key, value in obj.items()}
+    return obj
+
+
 def replace_problem_list(tool: str, obs, chart_problems: list[dict]):
     """The simulator's problem list is the graph-derived reference for patient diagnosis
     (correct diagnoses of the source questions, with ICD-10 codes). In the environment it
@@ -248,6 +269,8 @@ async def reset(redis, tool_definitions: list[dict], *, gt_id: int | None, task:
 
     budget = budget or settings.env_default_budget
     kwargs = dict(ctx["task_kwargs"])
+    if ctx["task"] == "imaging_indication":
+        kwargs["ordering_encounter_imaging_included"] = settings.pre_read_include_ordering_encounter_imaging
     instructions = build_system_prompt(task=ctx["task"], arm="structured", budget=budget,
                                        encounter_id=ctx["encounter_id"], gt_id=gt_id, **kwargs)
     intro = build_patient_intro(patient_id=ctx["patient_id"], task=ctx["task"],
@@ -259,6 +282,7 @@ async def reset(redis, tool_definitions: list[dict], *, gt_id: int | None, task:
         "gt_id": gt_id, "task": ctx["task"], "split": ctx["split"], "variant": ctx["variant"],
         "patient_id": ctx["patient_id"], "encounter_id": ctx["encounter_id"],
         "allowed_encounter_ids": ctx["allowed_encounter_ids"],
+        "include_ordering_encounter_imaging": settings.pre_read_include_ordering_encounter_imaging,
         "chart_problems": ctx["chart_problems"],
         "task_inputs": kwargs,
         "budget": budget, "steps": 0, "done": False, "submitted": False, "reward": None,
@@ -401,6 +425,11 @@ async def step(redis, db, dispatch, episode_id: str, name: str, arguments: dict,
         obs = replace_problem_list(name, obs, ep.get("chart_problems") or [])
         if ep.get("allowed_encounter_ids") is not None:
             obs = filter_future_encounters(obs, set(ep["allowed_encounter_ids"]))
+        if ep["task"] == "imaging_indication" and not ep.get("include_ordering_encounter_imaging", False):
+            obs = filter_ordering_encounter_imaging(
+                obs, ep["encounter_id"],
+                untyped_imaging=(name == "view_results" and (arguments or {}).get("result_type") == "imaging"),
+            )
         ep["steps"] += 1
         remaining -= 1
     ep["trace"].append({"step": ep["steps"], "tool_name": name, "arguments": arguments,

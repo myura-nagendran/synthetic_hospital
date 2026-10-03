@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     scorer_token: str = "dev-scorer-token-change-in-production"
     # Reset-and-step environment: default action budget per episode (the paper used 40).
     env_default_budget: int = 40
+    # No study-level linkage is available: this controls the whole ordering
+    # encounter imaging section, not a verified individual study report.
+    pre_read_include_ordering_encounter_imaging: bool = False
     # Start one episode at boot (Harbor tasks): the agent reads it from GET /env/current.
     autostart_gt_id: int | None = None
     autostart_budget: int | None = None
