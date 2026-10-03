@@ -16,9 +16,6 @@ from epic_sim.app.auth.oauth2 import CurrentUser, get_current_user
 from epic_sim.app.models.auth import AgentSubmission
 from epic_sim.app.models.base import get_db
 from epic_sim.app.schemas.epic import (
-    AddProblemRequest,
-    ImagingOrderRequest,
-    LabOrderRequest,
     ToolCallRequest,
     ToolCallResponse,
     ToolDefinition,
