@@ -154,6 +154,8 @@ def strip_outcome_sections(obj):
         return [strip_outcome_sections(i) for i in obj
                 if not (isinstance(i, dict) and str(i.get("section_type", "")).lower() in OUTCOME_SECTIONS)]
     if isinstance(obj, dict):
+        if str(obj.get("section_type", "")).lower() in OUTCOME_SECTIONS:
+            return {"error": "Assessment and plan sections are not accessible in this task."}
         return {k: strip_outcome_sections(v) for k, v in obj.items()
                 if not (k.lower() in OUTCOME_SECTIONS and isinstance(v, str))}
     return obj
