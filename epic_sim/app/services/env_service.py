@@ -390,7 +390,13 @@ async def step(redis, db, dispatch, episode_id: str, name: str, arguments: dict,
                         f"submit your best answer."}
     else:
         try:
-            raw = await dispatch(name, arguments or {}, db, "attending", episode_id)
+            if name == "open_chart" and ep.get("allowed_encounter_ids") is not None:
+                raw = await dispatch(
+                    name, arguments or {}, db, "attending", episode_id,
+                    allowed_encounter_ids=set(ep["allowed_encounter_ids"]),
+                )
+            else:
+                raw = await dispatch(name, arguments or {}, db, "attending", episode_id)
         except HTTPException as exc:
             raw = {"error": str(exc.detail)}
         except KeyError as exc:

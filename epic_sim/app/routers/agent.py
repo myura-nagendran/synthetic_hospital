@@ -267,6 +267,7 @@ async def _dispatch_tool(
     db: AsyncSession,
     role: str,
     session_id: str = "",
+    *, allowed_encounter_ids: set[int] | None = None,
 ) -> dict | list | str:
     """Route tool calls to service functions."""
     match tool:
@@ -282,7 +283,7 @@ async def _dispatch_tool(
 
         case "open_chart":
             summary = await epic_service.get_patient_summary(
-                db, args["patient_id"], role
+                db, args["patient_id"], role, allowed_encounter_ids=allowed_encounter_ids
             )
             return summary.model_dump()
 
