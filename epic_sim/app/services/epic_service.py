@@ -87,7 +87,8 @@ def _section_to_entry(s: EncounterEhrSection) -> SectionEntry:
 # ---------------------------------------------------------------------------
 
 async def get_patient_summary(
-    db: AsyncSession, patient_id: int, role: str
+    db: AsyncSession, patient_id: int, role: str,
+    allowed_encounter_ids: set[int] | None = None,
 ) -> PatientSummary:
     """Patient snapshot: demographics, active problems, recent encounters, meds, allergies."""
     # Patient
@@ -98,13 +99,20 @@ async def get_patient_summary(
     profile = patient.profile or {}
     name = profile.get("name", f"Patient {patient_id}")
 
-    # Recent encounters (latest 5)
-    enc_q = (
-        select(LongitudinalEncounter)
-        .where(LongitudinalEncounter.patient_id == patient_id)
-        .order_by(LongitudinalEncounter.encounter_date.desc())
-        .limit(5)
+    # Apply the episode boundary before selecting the snapshot's source encounter.
+    enc_q = select(LongitudinalEncounter).where(
+        LongitudinalEncounter.patient_id == patient_id
     )
+    if allowed_encounter_ids is not None:
+        enc_q = enc_q.where(LongitudinalEncounter.encounter_id.in_(allowed_encounter_ids))
+        enc_q = enc_q.order_by(
+            LongitudinalEncounter.encounter_date.desc(),
+            LongitudinalEncounter.encounter_order.desc(),
+            LongitudinalEncounter.encounter_id.desc(),
+        )
+    else:
+        enc_q = enc_q.order_by(LongitudinalEncounter.encounter_date.desc())
+    enc_q = enc_q.limit(5)
     enc_result = await db.execute(enc_q)
     encounters = enc_result.scalars().all()
 
